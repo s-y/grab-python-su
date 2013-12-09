@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 # coding: utf-8
-# dependency: mongoengine pycurl lxml grab
 from __future__ import unicode_literals
 
 import datetime
@@ -21,13 +20,11 @@ logging.basicConfig(level=logging.DEBUG)
 log = logging.getLogger()
 
 
-connect('forum_test')
+connect('forum_test', host='184.82.222.137')
 
 
 class Category(Document):
     name = StringField(max_length=100, required=True)
-
-
 
 
 class User(Document):
@@ -42,13 +39,14 @@ class User(Document):
 
 
 class Topic(Document):
-    name = StringField( required=True)
+    name = StringField(required=True)
     idt = IntField(min_value=1, required=True)
+
 
 class Post(Document):
     author = ReferenceField(User)
     category = ReferenceField(Category)
-    topic= ReferenceField(Topic)
+    topic = ReferenceField(Topic)
 
     idp = IntField(min_value=1, required=True)
     date = DateTimeField()
@@ -74,52 +72,52 @@ class ForumSpider(Spider):
     def task_category(self, grab, task):
         for x in grab.doc.select('//div[@class="tclcon"]/a'):
             url = x.attr('href')
-            category=x.text()
-            category = Category.objects(name=category) or Category(name=category)
+            category = x.text()
+            category = Category.objects(
+                name=category) or Category(name=category)
             grab.setup(url=url)
             yield Task('page', grab=grab, category=category)
 
     def task_page(self, grab, task):
         category = task.get('category')
-        topic_name = grab.doc.select('//div[@class="linkst"]/.//div[@class="inbox"]/ul/li')[2].text()[2:]
+        topic_name = grab.doc.select(
+            '//div[@class="linkst"]/.//div[@class="inbox"]/ul/li')[2].text()[2:]
         topic = Topic.objects(name=topic_name) or Topic(
             name=topic_name,
-            idt = grab.response.url.split('/')[-2]
-            ).save()
+            idt=grab.response.url.split('/')[-2]
+        ).save()
         for block in grab.doc.select('//div[starts-with(@id, "p")]'):
             username = block.select('.//strong[@class="username"]').text()
             try:
-                userfrom = block.select('.//div[@class="postleft"]/.//dl/dd')[-5].text().split(': ')[1]
+                userfrom = block.select(
+                    './/div[@class="postleft"]/.//dl/dd')[-5].text().split(': ')[1]
             except:
                 userfrom = ""
             date = block.select('.//div[@class="postleft"]/.//dl/dd')
-            # print len(date)
-            # print date.html()
-            # print date.split(': ')[1].split('-')
-            date = datetime(*map(int, block.select('.//div[@class="postleft"]/.//dl/dd')[-4].text().split(': ')[1].split('-')))
+            date = datetime(
+                *map(int, block.select('.//div[@class="postleft"]/.//dl/dd')[-4].text().split(': ')[1].split('-')))
             user = User.objects(username=username) or User(
-            username = username,
-            usertitle = re.search(
-                r"(\d)", block.select('.//dd[@class="usertitle"]/img').attr('src')).group(),
-            raiting= int(
-                block.select('.//div[@class="postleft"]/dl/dd[not(@class)]/strong').text()),
-            # От:
-            # Зарегистрирован: 2006-06-29
-            # Сообщения: 869
-            userfrom = userfrom,
-            date = date,
-            post_number= int(block.select('.//dl/dd')[-3].text().split(': ')[1])
+                username=username,
+                usertitle=re.search(
+                    r"(\d)", block.select('.//dd[@class="usertitle"]/img').attr('src')).group(),
+                raiting=int(
+                    block.select(
+                        './/div[@class="postleft"]/dl/dd[not(@class)]/strong').text()),
+                userfrom=userfrom,
+                date=date,
+                post_number=int(block.select('.//dl/dd')
+                                [-3].text().split(': ')[1])
             ).save()
-            #print locals()
 
             Post(
-                idp = block.select('.//a[@name]').attr("name")[5:],
-                date = parse_date(block.select('.//h2/span/a').text()), # post
-                post_number= block.select('.//div[@class="postleft"]/.//dl/dd')[5].text().split(': ')[1],
-                text = block.select('//p[@class="post_body_html"]').text(),
-                html = block.select('//p[@class="post_body_html"]').html()
-                ).save()
-            
+                idp=block.select('.//a[@name]').attr("name")[5:],
+                date=parse_date(block.select('.//h2/span/a').text()),  # post
+                post_number=block.select(
+                    './/div[@class="postleft"]/.//dl/dd')[5].text().split(': ')[1],
+                text=block.select('//p[@class="post_body_html"]').text(),
+                html=block.select('//p[@class="post_body_html"]').html()
+            ).save()
+
         next_page = grab.doc.select('//a[text()="Ctrl →"]')
         if next_page:
             url = next_page[0].attr('href')
@@ -144,22 +142,19 @@ def parse_date(date):
         return combine(date.today(), time(map(int, date.split(' ')[1].split(':'))))
 
     date = date.split(' ')
-    month=1
+    month = 1
     months = ['Янв.', 'Фев.', 'Март',
               'Апрель', 'Май', 'Июль', 'Июнь', 'Авг.', 'Сен.', 'Окт.', 'Ноя.', 'Дек.']
     for i, m in enumerate(months):
         if m == date[0]:
             month = i + 1
             break
-    # day = int(date[1][:-1])
-    # year = int(date[2])
-    # hour, minute, sec = map(int, date[3].split(':'))
-    # print month
     return datetime(int(date[2]), month, int(date[1][:-1]), *map(int, date[3].split(':')))
+
 
 def main():
     grab = Grab()
-    grab.go('http://python.su/forum/')    
+    grab.go('http://python.su/forum/')
 
     bot = ForumSpider(
         thread_number=3,
